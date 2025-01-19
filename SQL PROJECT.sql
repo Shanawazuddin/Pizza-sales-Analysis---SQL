@@ -1,0 +1,232 @@
+CREATE DATABASE PIZZAHUT;
+
+USE PIZZAHUT;
+
+
+SELECT * FROM PIZZAS;
+
+SELECT * FROM PIZZA_TYPES;
+
+CREATE TABLE orders (
+order_id int not null primary key ,
+date date not null,
+time time not null
+);
+
+
+CREATE TABLE order_details (
+order_details_id int not null primary key,
+order_id int not null,
+pizza_id varchar(50) not null,
+quantity int not null
+);
+
+
+SELECT * FROM order_details;
+
+-- 1. retrive the total number of orders placed
+-- ## 21350
+SELECT 
+    COUNT(ORDER_ID) AS TOTAL_ORDERS
+FROM
+    ORDERS;
+
+
+-- 2. TOTAL REVENUE GENEREATED FROM PIZZA SALES
+-- TOTAL REVENUE 291191
+
+SELECT 
+    ROUND(SUM(PRICE * QUANTITY), 2) AS TOTAL_REVENUE
+FROM
+    PIZZAS
+        JOIN
+    ORDER_DETAILS ON PIZZAS.PIZZA_ID = ORDER_DETAILS.PIZZA_ID; 
+    
+    
+-- 3. Identify the highest-priced pizza.
+-- THE GREEK PIZZA 35.95
+
+SELECT 
+    NAME, PRICE
+FROM
+    PIZZAS
+        JOIN
+    PIZZA_TYPES ON PIZZAS.PIZZA_TYPE_ID = PIZZA_TYPES.PIZZA_TYPE_ID
+ORDER BY PRICE DESC
+LIMIT 1;
+
+
+-- 4. Identify the most common pizza size ordered.
+-- SIZE L, 6592 QUANTITY ORDERED
+
+SELECT 
+    SIZE AS COMMON_SIZE,
+    COUNT(ORDER_DETAILS_ID) AS QUANTITY_ORDERED
+FROM
+    PIZZAS
+        JOIN
+    ORDER_DETAILS ON PIZZAS.PIZZA_ID = ORDER_DETAILS.PIZZA_ID
+GROUP BY SIZE
+ORDER BY QUANTITY_ORDERED DESC
+LIMIT 1;
+
+-- 5. List the top 5 most ordered pizza types along with their quantities.
+-- bbq_ckn 903
+-- hawaiian	873
+-- pepperoni 858
+-- classic_dlx 835
+-- thai_ckn	833
+
+SELECT 
+    PIZZA_TYPES.PIZZA_TYPE_ID,
+    NAME,
+    SUM(ORDER_DETAILS.QUANTITY) AS QUANTITY
+FROM
+    PIZZA_TYPES
+        JOIN
+    PIZZAS ON PIZZAS.PIZZA_TYPE_ID = PIZZA_TYPES.PIZZA_TYPE_ID
+        JOIN
+    ORDER_DETAILS ON ORDER_DETAILS.PIZZA_ID = PIZZAS.PIZZA_ID
+GROUP BY PIZZA_TYPES.PIZZA_TYPE_ID, NAME
+ORDER BY QUANTITY DESC
+LIMIT 5;
+
+
+-- 6. Join the necessary tables to find the total quantity of each pizza category ordered.
+-- Classic	5232
+-- Veggie	4219
+-- Supreme	4241
+-- Chicken	3957
+
+SELECT 
+    CATEGORY AS PIZZA_CATEGORY, SUM(QUANTITY) AS QUANTITY
+FROM
+    PIZZA_TYPES
+        JOIN
+    PIZZAS ON PIZZA_TYPES.PIZZA_TYPE_ID = PIZZAS.PIZZA_TYPE_ID
+        JOIN
+    ORDER_DETAILS ON PIZZAS.PIZZA_ID = ORDER_DETAILS.PIZZA_ID
+GROUP BY CATEGORY;
+
+
+-- 7. Determine the distribution of orders by hour of the day.
+-- 11	1231
+-- 12	2520
+-- 13	2455
+-- 14	1472
+-- 15	1468
+-- 16	1920
+-- 17	2336
+-- 18	2399
+-- 19	2009
+-- 20	1642
+-- 21	1198
+-- 22	663
+-- 23	28
+-- 10	8
+-- 9	1
+
+SELECT 
+    HOUR(TIME) AS ORDER_HOUR, COUNT(ORDER_ID) AS ORDER_COUNT
+FROM
+    ORDERS
+GROUP BY ORDER_HOUR;
+
+
+-- 8. Join relevant tables to find the category-wise distribution of pizzas.
+
+-- Chicken	6
+-- Classic	8
+-- Supreme	9
+-- Veggie	9
+
+SELECT 
+    CATEGORY, COUNT(PIZZA_TYPE_ID)
+FROM
+    PIZZA_TYPES
+GROUP BY CATEGORY;
+
+-- 9. Group the orders by date and calculate the average number of pizzas ordered per day.
+-- 138
+
+SELECT 
+    ROUND(AVG(QUANTITY), 0)
+FROM
+    (SELECT 
+        DATE(ORDERS.DATE) AS ORDER_DATE, SUM(QUANTITY) AS QUANTITY
+    FROM
+        ORDERS
+    JOIN ORDER_DETAILS ON ORDERS.ORDER_ID = ORDER_DETAILS.ORDER_ID
+    GROUP BY ORDER_DATE) AS ORDER_QUANTITY;
+
+
+-- 10. Determine the top 3 most ordered pizza types based on revenue.
+
+-- bbq_ckn	The Barbecue Chicken Pizza	15949.25
+-- thai_ckn	The Thai Chicken Pizza	15184.75
+-- cali_ckn	The California Chicken Pizza	14527.25
+
+SELECT 
+    PIZZA_TYPES.PIZZA_TYPE_ID,
+    PIZZA_TYPES.NAME,
+    SUM(QUANTITY * PRICE) AS REVENUE
+FROM
+    PIZZA_TYPES
+        JOIN
+    PIZZAS ON PIZZAS.PIZZA_TYPE_ID = PIZZA_TYPES.PIZZA_TYPE_ID
+        JOIN
+    ORDER_DETAILS ON PIZZAS.PIZZA_ID = ORDER_DETAILS.PIZZA_ID
+GROUP BY PIZZA_TYPE_ID , PIZZA_TYPES.NAME
+ORDER BY REVENUE DESC
+LIMIT 3;
+
+
+-- 11. Calculate the percentage contribution of each pizza type to total revenue.
+
+SELECT 
+    PIZZA_TYPES.PIZZA_TYPE_ID,
+    ROUND(SUM(QUANTITY * PRICE) / (SELECT 
+                    ROUND(SUM(PRICE * QUANTITY), 2) AS TOTAL_REVENUE
+                FROM
+                    PIZZAS
+                        JOIN
+                    ORDER_DETAILS ON PIZZAS.PIZZA_ID = ORDER_DETAILS.PIZZA_ID) * 100,
+            0) AS REVENUE_PERCENTAGE
+FROM
+    PIZZA_TYPES
+        JOIN
+    PIZZAS ON PIZZAS.PIZZA_TYPE_ID = PIZZA_TYPES.PIZZA_TYPE_ID
+        JOIN
+    ORDER_DETAILS ON PIZZAS.PIZZA_ID = ORDER_DETAILS.PIZZA_ID
+GROUP BY PIZZA_TYPES.PIZZA_TYPE_ID;
+
+
+
+-- 12. Analyze the cumulative revenue generated over time.
+
+SELECT DATE,  ROUND(SUM(REVENUE) OVER(ORDER BY DATE))AS CUM_REVENUE FROM 
+(SELECT DATE(DATE) AS DATE, SUM(QUANTITY * PRICE) AS REVENUE
+FROM ORDERS
+JOIN ORDER_DETAILS ON
+ORDER_DETAILS.ORDER_ID = ORDERS.ORDER_ID
+JOIN PIZZAS ON 
+ORDER_DETAILS.PIZZA_ID = PIZZAS.PIZZA_ID
+GROUP BY DATE) AS SALES;
+
+
+-- Determine the top 3 most ordered pizza types
+-- based on revenue for each pizza category.
+
+SELECT CATEGORY, NAME, REVENUE, RN FROM 
+(SELECT CATEGORY, NAME, REVENUE, 
+RANK() OVER(PARTITION BY CATEGORY ORDER BY REVENUE DESC) AS RN FROM
+(SELECT PIZZA_TYPES.PIZZA_TYPE_ID, PIZZA_TYPES.CATEGORY, PIZZA_TYPES.NAME, SUM(QUANTITY * PRICE) AS REVENUE
+FROM ORDERS
+JOIN ORDER_DETAILS ON
+ORDER_DETAILS.ORDER_ID = ORDERS.ORDER_ID
+JOIN PIZZAS ON 
+ORDER_DETAILS.PIZZA_ID = PIZZAS.PIZZA_ID
+JOIN PIZZA_TYPES ON
+PIZZAS.PIZZA_TYPE_ID = PIZZA_TYPES.PIZZA_TYPE_ID
+GROUP BY PIZZA_TYPES.PIZZA_TYPE_ID, PIZZA_TYPES.CATEGORY, PIZZA_TYPES.NAME)AS A)AS B
+WHERE RN <=3 ;
